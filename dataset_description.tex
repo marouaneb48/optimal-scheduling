@@ -1,0 +1,105 @@
+\subsection{Dataset description}\label{appendix:data_description}
+
+\subsubsection{Data source and Collection }
+Our data comes from a French reward-based crowdfunding platform: Kisskissbankbank (KKBB)\footnote{https://www.kisskissbankbank.com/en}, that supports creative, cultural, and social initiatives by enabling project creators to raise funds directly from the public. 
+The platform hosts a diverse range of campaigns across various categories, including music, film and video, art, technology, design, and social initiatives.
+To give you an idea of the scope, in 2015, the most popular categories were:  music (16\%), citizenship and solidarity (14\%), art (11\%), and film and video (11\%) representing the largest shares, followed by live performance, design and innovation, and other creative or social domains (see Figure \ref{fig:sub1} ). 
+
+In terms of success rates, approximately 58\% of campaigns on the platform reached their funding goals, while 42\% failed in 2015 (Figure \ref{fig:sub3}). 
+
+\subsection{Descriptive statistics}
+
+Figure \ref{fig:sub2} highlights the evolution of backer activity, measured as the average number of contributions per week by year. Contribution levels followed a similar pattern, with steady growth in the early years, stabilization during the mid-2010s, and a noticeable drop in more recent years. Finally, Figure \ref{fig:sub4} presents the average weekly funding goals per year, which reveal a long-term upward trend: over time, project creators increasingly set higher targets, reflecting both rising ambitions and changing perceptions of crowdfunding’s potential.
+
+\begin{figure}[htbp]
+  \centering
+  % -------- Row 1 --------
+  \begin{minipage}{\textwidth}
+    \centering
+    \begin{subfigure}[t]{0.48\textwidth}
+      \centering
+      \includegraphics[width=\linewidth]{\detokenize{Images/data description/categories 2015.png}}
+      \caption{Composition of Project Categories in 2015}
+      \label{fig:sub1}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+      \centering
+      \includegraphics[width=\linewidth]{\detokenize{Images/data description/2015 succesful failed-2.png}}
+      \caption{Success vs Failure Rate of Campaigns in 2015}
+      \label{fig:sub3}
+    \end{subfigure}
+  \end{minipage}
+
+  \vspace{0.6em}
+
+  % -------- Row 2 --------
+  \begin{minipage}{\textwidth}
+    \centering
+    \begin{subfigure}[t]{0.48\textwidth}
+      \centering
+      \includegraphics[width=\linewidth]{\detokenize{Images/data description/number of contributions per week.png}}
+      \caption{Average weekly contributions per year}
+      \label{fig:sub2}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+      \centering
+      \includegraphics[width=\linewidth]{\detokenize{Images/data description/target.png}}
+      \caption{Average weekly funding targets per year}
+      \label{fig:sub4}
+    \end{subfigure}
+  \end{minipage}
+
+  \caption{Descriptive statistics of crowdfunding activity between 2010 and 2023.}
+  \label{fig:descriptive}
+\end{figure}
+
+\subsection{Dataset Handling}
+
+\subsubsection{Temporal Partitioning and Data Splitting}
+The raw dataset was aggregated into weekly time steps, with each row representing the platform's state and outcome for a specific week $t$. The data spans from January 2014 to January 2024. 
+
+Regarding validation, we employed a standard random partitioning strategy rather than a strict time-series cross-validation. The weekly observations were split into training (80\%) and testing (20\%) sets using a fixed random seed ($seed=42$) to ensure reproducibility. This approach assumes that while temporal dependencies exist, the weekly state variables capture sufficient context (e.g., seasonality, platform age, active project load) to treat observations as independent samples for the Random Forest classifier.
+
+\subsubsection{Weekly Variables Computation}
+The features characterizing each week overlap three main dimensions: the volume of activity, the financial targets, and the diversity of projects. Table \ref{tab:weekly_variables} summarizes the definitions of the key weekly variables computed.
+
+\begin{table}[htbp]
+\caption{Definition of Weekly Computed Variables}
+\label{tab:weekly_variables}
+\centering
+\begin{tabular}{l l} 
+\toprule
+\textbf{Variable} & \textbf{Description} \\ 
+\midrule
+$A_t$ & Count of \textit{currently active} projects in week $t$. \\
+$B_t$ & Count of projects \textit{starting} in week $t$. \\
+$C_t$ & Count of projects \textit{ending} in week $t$. \\
+$D_t$ & Diversity (Shannon Entropy) of project categories (computed for active/starting/ending sets). \\
+$G_t$ & Mean funding goal (target) of projects (computed for active/starting/ending sets). \\
+$M_t$ & Platform Age (Number of years since 2010). \\
+$Seasonality$ & Binary indicators for seasons (Winter, Spring, Summer, Autumn) and holidays (Noel, Toussaint). \\
+$HHI^*$ & Herfindahl-Hirschman Index of category concentration (calculated as $\sum s_i^2$). \\
+\bottomrule
+\multicolumn{2}{r}{\footnotesize{*HHI was maintained in the engineering pipeline but ultimately excluded from the final model.}}
+\end{tabular}
+\end{table}
+
+\subsubsection{Data Processing and Handling}
+\paragraph{Target Variable Definition}
+To transform the continuous weekly success rate into a binary classification target, we utilized the median success rate as the threshold.
+\begin{equation}
+    y_t = \mathbb{I}(\text{Success Rate}_t > \text{Median}(\text{Success Rate}))
+\end{equation}
+Using the median ensures a perfectly balanced dataset (50\% High Success, 50\% Low Success) for the classification task, preventing class imbalance biases that often affect performance metrics.
+
+\paragraph{Missing Data and Preprocessing}
+Missing numerical values were imputed with zeros. Categorical features, specifically the season and holiday indicators, were binary encoded (0/1). Project durations, where missing, were inferred from the difference between start and end dates.
+
+\paragraph{Reproducibility Details}
+The surrogate model implements a Random Forest Classifier using the `scikit-learn` library. Key hyperparameters include:
+\begin{itemize}
+    \item \textbf{Number of Estimators}: 100
+    \item \textbf{Random State}: 42 (fixed for all stochastic operations)
+    \item \textbf{Split Ratio}: 0.8 / 0.2 (Train / Test)
+\end{itemize}
+The code and environment versioning ensure that all preprocessing and training steps are fully reproducible.
