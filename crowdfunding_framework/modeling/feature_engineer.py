@@ -10,15 +10,15 @@ class FeatureEngineer:
         """
         Calculates Shannon entropy for a list of categories.
         categories: list or series of category IDs.
+        Uses numpy for speed (avoids pd.Series overhead in hot loop).
         """
         if len(categories) == 0:
             return 0.0
-        
-        counts = pd.Series(categories).value_counts()
-        total = len(categories)
-        probs = counts / total
-        entropy = -sum(probs * np.log(probs))
-        return entropy
+
+        # Use numpy unique + counts instead of pd.Series.value_counts
+        _, counts = np.unique(categories, return_counts=True)
+        probs = counts / counts.sum()
+        return -float(np.sum(probs * np.log(probs)))
 
     def calculate_hhi(self, contributions_amounts):
         """
@@ -111,21 +111,15 @@ class FeatureEngineer:
         Computes the full state vector S_t for a specific week (Online/GA usage).
         """
         
-        # Ensure T is aware
-        t = pd.to_datetime(week_date, utc=True)
+        # Ensure T is aware (skip conversion if already Timestamp)
+        t = week_date if isinstance(week_date, pd.Timestamp) else pd.to_datetime(week_date, utc=True)
         t_end = t + pd.Timedelta(weeks=1)
-        
+
         # 1. Segmentation
         starting_projs = new_projects
-        
+
         # Ending: Filter from active_projects if data exists
         if not active_projects.empty and 'end_date' in active_projects.columns:
-            # projects ending in [t, t+1)
-            # Ensure end_date is datetime
-            # Ensure end_date is datetime
-            if not pd.api.types.is_datetime64_any_dtype(active_projects['end_date']):
-                active_projects['end_date'] = pd.to_datetime(active_projects['end_date'], utc=True)
-                
             ending_mask = (active_projects['end_date'] >= t) & (active_projects['end_date'] < t_end)
             ending_projs = active_projects[ending_mask]
         else:

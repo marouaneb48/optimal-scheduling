@@ -46,3 +46,13 @@ python crowdfunding_framework/main.py optimize \
 ## Outputs
 - **`optimization_report.html`**: Interactive report with Gantt charts and Heatmaps.
 - **`optimization_results.png`**: Static summary plots.
+
+
+## Pareto
+
+# Default sweep (9 weights from 0 to 1.0)
+python -m crowdfunding_framework.main pareto --projects simulation_input/upcoming_projects.csv --context simulation_input/active_context.csv
+
+# Custom weights
+python -m crowdfunding_framework.main pareto --projects simulation_input/upcoming_projects.csv --context simulation_input/active_context.csv --weights 0 0.01 0.02 0.03 0.05 0.06 --population 50 --generations 100
+

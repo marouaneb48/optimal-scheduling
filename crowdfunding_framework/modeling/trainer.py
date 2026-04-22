@@ -5,7 +5,7 @@ import pandas as pd
 import os
 
 class ModelTrainer:
-    def __init__(self, data_dir='data/raw data', feature_file='weekly_features_from_raw.csv', model_file='model.pkl'):
+    def __init__(self, data_dir='data/raw data', feature_file='weekly_features_from_raw.csv', model_file='model_autogluon'):
         self.data_dir = data_dir
         self.feature_file = feature_file
         self.model_file = model_file
@@ -73,38 +73,36 @@ class ModelTrainer:
         final_df.to_csv(target_file, index=False)
         return final_df
 
-    def train(self, force_compute=False, start_date=None, end_date=None):
+    def train(self, force_compute=False, start_date=None, end_date=None, exclude_features=None):
         """
         Orchestrates the training pipeline.
         1. Checks for cached features.
         2. If missing or forced, computes features from raw.
         3. Trains model.
+
+        exclude_features: list of feature names to exclude from training
+                          (e.g. ['Age'] to force the model to rely on controllable features)
         """
         train_df = None
-        
+
         # 1. Check Cache
         if not force_compute and os.path.exists(self.feature_file):
             print(f"Index found: {self.feature_file}. Loading features directly...")
             train_df = pd.read_csv(self.feature_file)
-            
+
             # Simple validation
             if 'success_rate' not in train_df.columns:
                 print("Cached file invalid (missing target). Recomputing...")
                 train_df = None
-        
+
         # 2. Compute if needed
         if train_df is None:
             train_df = self.compute_features(start_date=start_date, end_date=end_date)
-            
+
         # 3. Train
         if not train_df.empty:
-            # Create Label
-            median_rate = train_df['success_rate'].median()
-            print(f"Median Success Rate: {median_rate:.4f}")
-            train_df['state_label'] = (train_df['success_rate'] > median_rate).astype(int)
-            
             print("Training Surrogate Model...")
-            self.model.train(train_df)
+            self.model.train(train_df, exclude_features=exclude_features)
         else:
             print("Error: No valid training data available.")
 
