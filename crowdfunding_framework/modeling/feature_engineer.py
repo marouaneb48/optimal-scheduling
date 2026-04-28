@@ -148,20 +148,20 @@ class FeatureEngineer:
         state.update(compute_metrics(current_projs, 'current_projects'))
         state.update(compute_metrics(starting_projs, 'starting_projects'))
         state.update(compute_metrics(ending_projs, 'ending_projects'))
-        
-        # 3. Contributions & Concentration
-        # Removed Heuristics: total_contributions, concentration
 
-        # 4. Lagged Success (Ending Success Rate)
-        # Removed Heuristic: ending_success_rate (depended on estimated pledges)
-            
-        # 5. Seasonality
+        # Interaction features (must match _engineer_features in surrogate_model.py)
+        state['projects_diversity_interaction'] = (
+            state['current_projects'] * state['current_projects_diversity']
+        )
+        state['starting_ending_ratio'] = (
+            state['starting_projects'] / (state['ending_projects'] + 1e-6)
+        )
+        state['net_project_flow'] = state['starting_projects'] - state['ending_projects']
+
+        # Seasonality
         seasonality = self.get_seasonality_features(t)
         state.update(seasonality)
-        
-        # 6. Platform Age (M_t)
-        state['Age'] = int(t.year - 2010)
-        
+
         return state
 
     def compute_history(self, projects_df, contributions_agg_df, start_date='2014-01-01', end_date='2024-01-01'):
@@ -251,10 +251,6 @@ class FeatureEngineer:
                 
             # --- 5. SEASONALITY (French Holidays) ---
             holidays = self.get_seasonality_features(t)
-            
-            # --- 6. PLATFORM AGE (M_t) ---
-            # Age in years (Notebook Logic: Integer years since 2010)
-            M_t = int(t.year - 2010)
 
             # Assemble Row (Aligning keys to reference input_features.csv)
             row = {
@@ -264,7 +260,6 @@ class FeatureEngineer:
                 # 'concentration': HHI_norm, # REMOVED
                 # 'ending_success_rate': success_rate_end, # REMOVED
                 'success_rate': success_rate,
-                'Age': M_t,
                 **holidays
             }
             history.append(row)

@@ -17,19 +17,26 @@ class CrowdfundingProblem:
         self.projects = projects
         self.model = surrogate_model
         self.deviation_weight = deviation_weight
-        self.original_individual = np.array(original_individual) if original_individual is not None else None
+
+        if original_individual is None:
+            raise ValueError("original_individual cannot be None")
+        self.original_individual = np.array(original_individual)
+
         # Ensure status is lowercase for comparison if present
         if 'status' in self.projects.columns:
             self.projects['status'] = self.projects['status'].astype(str).str.lower()
-            
-        self.active_projects = active_projects if active_projects is not None else pd.DataFrame()
+
+        if active_projects is None:
+            raise ValueError("active_projects cannot be None")  
+        self.active_projects = active_projects
+
         self.T = time_horizon
         self.N = len(projects)
         self.fe = FeatureEngineer()
         
         # Base date
         if start_date is None:
-            self.start_date = pd.to_datetime('2024-01-01', utc=True)
+            raise ValueError("start_date can not be None ")
         else:
             self.start_date = pd.to_datetime(start_date, utc=True)
 
@@ -47,7 +54,6 @@ class CrowdfundingProblem:
         # Pre-compute week dates and seasonality (these never change)
         self._week_dates = [self.start_date + pd.Timedelta(weeks=t-1) for t in range(1, self.T + 1)]
         self._week_seasonality = [self.fe.get_seasonality_features(d) for d in self._week_dates]
-        self._week_ages = [int(d.year - 2010) for d in self._week_dates]
 
         # Pre-compute context metrics per week (counts, mean_goal, diversity)
         self._context_cache = {}
@@ -205,7 +211,6 @@ class CrowdfundingProblem:
             'ending_projects': ending_count,
             'ending_projects_target': ending_mean_goal,
             'ending_projects_diversity': ending_diversity,
-            'Age': self._week_ages[t - 1],
         }
         state.update(self._week_seasonality[t - 1])
         return state

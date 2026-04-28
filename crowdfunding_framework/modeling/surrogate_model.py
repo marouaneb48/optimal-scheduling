@@ -32,23 +32,7 @@ class SurrogateModel:
         """
         df = df.copy().sort_values('week_date').reset_index(drop=True)
 
-        # --- Lag features (what happened last week / 2 weeks ago) ---
-        for lag in [1, 2, 3]:
-            df[f'success_rate_lag{lag}'] = df['success_rate'].shift(lag)
-
-        # --- Rolling statistics (trend over last N weeks) ---
-        for window in [3, 5]:
-            df[f'success_rate_roll_mean_{window}w'] = (
-                df['success_rate'].shift(1).rolling(window).mean()
-            )
-            df[f'success_rate_roll_std_{window}w'] = (
-                df['success_rate'].shift(1).rolling(window).std()
-            )
-
-        # --- Momentum: rate of change from last week ---
-        df['success_rate_momentum'] = df['success_rate'].shift(1).diff()
-
-        # --- Interaction features ---
+        # --- Interaction features (computable at inference time) ---
         df['projects_diversity_interaction'] = (
             df['current_projects'] * df['current_projects_diversity']
         )
@@ -57,8 +41,8 @@ class SurrogateModel:
         )
         df['net_project_flow'] = df['starting_projects'] - df['ending_projects']
 
-        # --- Drop rows with NaNs introduced by lags/rolling ---
-        df = df.dropna().reset_index(drop=True)
+        # Lag/rolling/momentum features on success_rate are intentionally excluded:
+        # they are not computable for a hypothetical schedule at optimization time.
 
         print(f"After feature engineering: {len(df)} rows, {len(df.columns)} columns")
         return df
@@ -116,7 +100,9 @@ class SurrogateModel:
         # Step 1: enrich features
         df = self._engineer_features(df)
 
-        exclude_cols = {'week_date', 'success_rate'}
+        # 'Age' is unleveraged by the optimizer (constant within an 8-week
+        # horizon), so we always drop it — even from stale cached feature CSVs.
+        exclude_cols = {'week_date', 'success_rate', 'Age'}
         if exclude_features:
             exclude_cols.update(exclude_features)
             print(f"Excluding features: {exclude_features}")
@@ -239,6 +225,10 @@ class SurrogateModel:
 
         for model_name in self.model.model_names():
             if 'RandomForest' not in model_name and 'RF' not in model_name:
+                continue
+            # Skip stacked-layer models (L2+): they see OOF predictions as extra
+            # features and cannot be used standalone for inference on raw inputs.
+            if '_L2' in model_name or '_L3' in model_name:
                 continue
             ag_model = self.model._trainer.load_model(model_name)
 
