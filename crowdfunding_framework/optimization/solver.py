@@ -5,7 +5,7 @@ class GeneticSolver:
     """
     A Genetic Algorithm solver using PyGAD with schedule-aware operators.
     """
-    def __init__(self, problem, population_size=80, generations=200, mutation_rate=0.15, crossover_rate=0.8):
+    def __init__(self, problem, population_size=80, generations=200, mutation_rate=0.25, crossover_rate=0.8):
         self.problem = problem
         self.pop_size = population_size
         self.generations = generations
@@ -25,18 +25,18 @@ class GeneticSolver:
 
     def _build_initial_population(self):
         """
-        Builds a population seeded around the original schedule.
-        - Slot 0: exact original
-        - ~60% of pop: small perturbations (shift 10-30% of projects by ±1-2 weeks)
-        - ~20% of pop: medium perturbations (shift 30-60% of projects by ±1-3 weeks)
-        - ~20% of pop: random for diversity
+        Builds a population seeded for exploration.
+        - Slot 0: exact original (kept as a baseline anchor)
+        - ~30% of pop: small perturbations (shift 10-30% of projects by ±1-2 weeks)
+        - ~30% of pop: medium perturbations (shift 30-60% of projects by ±1-3 weeks)
+        - ~40% of pop: random for diversity
         """
         low, high = self.problem.bounds
         orig = np.array(self.initial_individual)
         pop = [orig.tolist()]
 
-        n_small = int(self.pop_size * 0.6)
-        n_medium = int(self.pop_size * 0.2)
+        n_small = int(self.pop_size * 0.3)
+        n_medium = int(self.pop_size * 0.3)
         n_random = self.pop_size - 1 - n_small - n_medium
 
         # Small perturbations: shift 10-30% of genes by ±1-2

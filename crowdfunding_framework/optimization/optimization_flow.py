@@ -641,7 +641,7 @@ class OptimizationFlow:
             start_date=sim_start_date,
             active_projects=context_df,
             time_horizon=args.weeks,
-            deviation_weight=getattr(args, 'deviation_weight', 0.01),
+            deviation_weight=getattr(args, 'deviation_weight', 0.0),
             original_individual=original_ind,
         )
 

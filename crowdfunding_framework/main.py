@@ -28,7 +28,7 @@ def main():
     opt_parser.add_argument('--projects', type=str, help='Path to upcoming projects CSV (Real IO)')
     opt_parser.add_argument('--context', type=str, help='Path to currently active projects CSV (Context)')
     opt_parser.add_argument('--weeks', type=int, default=8, help='Optimization Horizon (Weeks)')
-    opt_parser.add_argument('--deviation-weight', type=float, default=0.01, dest='deviation_weight', help='Weight for penalizing L1 deviation from the original schedule')
+    opt_parser.add_argument('--deviation-weight', type=float, default=0.0, dest='deviation_weight', help='Weight for penalizing L1 deviation from the original schedule')
 
     # --- PARETO Command ---
     pareto_parser = subparsers.add_parser('pareto', help='Sweep deviation weights and plot Pareto front')
