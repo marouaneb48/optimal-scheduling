@@ -692,51 +692,123 @@ class OptimizationFlow:
         print("Saved 'convergence.png'")
         plt.close(fig1)
 
-        # Figure 2: Weekly Success Rate — Optimized (with uncertainty) vs Original
+        # Figure 2: Weeks Crossing Above the Dataset Median (bad → good transitions)
         weeks = np.arange(1, args.weeks + 1)
         opt_rates = np.array([d['predicted_rate'] for d in opt_details])
-        opt_stds  = np.array([d['predicted_risk'] for d in opt_details])
         orig_rates = np.array([d['predicted_rate'] for d in orig_details])
+
+        # Median weekly success rate observed in the historical dataset
+        dataset_median = np.nan
+        features_path = 'weekly_features_from_raw.csv'
+        try:
+            feat_df = pd.read_csv(features_path)
+            if 'success_rate' in feat_df.columns:
+                dataset_median = float(feat_df['success_rate'].dropna().median())
+        except FileNotFoundError:
+            print(f"Warning: '{features_path}' not found; cannot compute dataset median.")
+
+        def _classify(r):
+            if np.isnan(r) or np.isnan(dataset_median):
+                return 'none'
+            return 'good' if r > dataset_median else 'bad'
+
+        orig_class = [_classify(r) for r in orig_rates]
+        opt_class  = [_classify(r) for r in opt_rates]
+
+        def _transition(o, n):
+            if o == 'none' or n == 'none': return 'no_data'
+            if o == 'bad'  and n == 'good': return 'bad_to_good'
+            if o == 'good' and n == 'bad' : return 'good_to_bad'
+            if o == 'good' and n == 'good': return 'stayed_good'
+            return 'stayed_bad'
+
+        trans = [_transition(o, n) for o, n in zip(orig_class, opt_class)]
+        n_bad_to_good = sum(1 for t in trans if t == 'bad_to_good')
+        n_good_to_bad = sum(1 for t in trans if t == 'good_to_bad')
+        n_stayed_good = sum(1 for t in trans if t == 'stayed_good')
+        n_stayed_bad  = sum(1 for t in trans if t == 'stayed_bad')
+
+        color_map = {
+            'bad_to_good': '#2ecc71',
+            'stayed_good': '#27ae60',
+            'stayed_bad' : '#e74c3c',
+            'good_to_bad': '#c0392b',
+            'no_data'    : '#bdc3c7',
+        }
+        label_map = {
+            'bad_to_good': f'Bad → Good ({n_bad_to_good})',
+            'stayed_good': f'Stayed Good ({n_stayed_good})',
+            'stayed_bad' : f'Stayed Bad ({n_stayed_bad})',
+            'good_to_bad': f'Good → Bad ({n_good_to_bad})',
+            'no_data'    : 'No Launches',
+        }
 
         fig2, ax2 = plt.subplots(figsize=(10, 5.5))
 
-        # Optimized — uncertainty band (1-sigma and 2-sigma)
-        opt_valid = ~np.isnan(opt_rates)
-        w_opt = weeks[opt_valid]
-        r_opt = opt_rates[opt_valid]
-        s_opt = opt_stds[opt_valid]
+        # Reference line at the dataset median
+        if not np.isnan(dataset_median):
+            ax2.axhline(y=dataset_median, color='gray', linestyle=':', linewidth=1.5,
+                        label=f'Dataset Median ({dataset_median:.3f})', zorder=2)
 
-        ax2.fill_between(w_opt, r_opt - 2 * s_opt, r_opt + 2 * s_opt,
-                         alpha=0.10, color='#2ecc71', label='Optimized $\pm 2\sigma$')
-        ax2.fill_between(w_opt, r_opt - s_opt, r_opt + s_opt,
-                         alpha=0.25, color='#2ecc71', label='Optimized $\pm 1\sigma$')
-        ax2.plot(w_opt, r_opt, 'o-', color='#2ecc71', linewidth=2.5,
-                 markersize=8, label='Optimized (predicted)', zorder=5)
+        # Per-week colored bars at the optimized rate, color encodes transition
+        seen = set()
+        for w, t, r in zip(weeks, trans, opt_rates):
+            if np.isnan(r):
+                ax2.axvspan(w - 0.4, w + 0.4, alpha=0.07, color='gray')
+                continue
+            label = label_map[t] if t not in seen else None
+            seen.add(t)
+            ax2.bar(w, r, color=color_map[t], alpha=0.7, edgecolor='black',
+                    linewidth=0.8, width=0.7, label=label, zorder=3)
 
-        # Original — plain line
+        # Overlay the original predicted rate so the transition is visible
         orig_valid = ~np.isnan(orig_rates)
-        w_orig = weeks[orig_valid]
-        r_orig = orig_rates[orig_valid]
-        ax2.plot(w_orig, r_orig, 's--', color='#3498db', linewidth=2,
-                 markersize=7, label='Original (predicted)', zorder=4)
-
-        # Annotate weeks with no launches
-        for t in weeks:
-            if np.isnan(opt_rates[t - 1]) and np.isnan(orig_rates[t - 1]):
-                ax2.axvspan(t - 0.4, t + 0.4, alpha=0.07, color='gray')
+        ax2.plot(weeks[orig_valid], orig_rates[orig_valid], 's--', color='#3498db',
+                 linewidth=2, markersize=6, label='Original (predicted)', zorder=4)
 
         ax2.set_xlabel('Week', fontsize=12)
         ax2.set_ylabel('Predicted Success Rate', fontsize=12)
-        ax2.set_title('Weekly Success Rate: Optimized (with uncertainty) vs Original',
-                       fontsize=14, fontweight='bold')
+        ax2.set_title(
+            f'Weeks Crossing Above Dataset Median: {n_bad_to_good} Bad → Good',
+            fontsize=14, fontweight='bold')
         ax2.set_xticks(weeks)
-        ax2.legend(fontsize=10, loc='best')
-        ax2.grid(True, alpha=0.3)
+        ax2.legend(fontsize=9, loc='best')
+        ax2.grid(True, alpha=0.3, axis='y')
         ax2.tick_params(labelsize=10)
         fig2.tight_layout()
         fig2.savefig('weekly_success_rate.png', dpi=150)
-        print("Saved 'weekly_success_rate.png'")
+        print(f"Saved 'weekly_success_rate.png' — {n_bad_to_good} weeks went bad → good "
+              f"(median = {dataset_median:.3f}).")
         plt.close(fig2)
+
+        # Figure 3: Number of Good Weeks — Original vs Optimized
+        n_good_orig = sum(1 for c in orig_class if c == 'good')
+        n_good_opt  = sum(1 for c in opt_class  if c == 'good')
+        n_weeks_with_data = sum(1 for c in orig_class if c != 'none')
+
+        fig3, ax3 = plt.subplots(figsize=(7, 5))
+        bars = ax3.bar(['Original', 'Optimized'],
+                       [n_good_orig, n_good_opt],
+                       color=['#3498db', '#2ecc71'],
+                       edgecolor='black', linewidth=0.8, width=0.55)
+        for bar, value in zip(bars, [n_good_orig, n_good_opt]):
+            ax3.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                     str(value), ha='center', va='bottom',
+                     fontsize=12, fontweight='bold')
+
+        ax3.set_ylabel('Number of Good Weeks (rate > dataset median)', fontsize=12)
+        ax3.set_title(
+            f'Good Weeks: Original vs Optimized '
+            f'(out of {n_weeks_with_data}, median = {dataset_median:.3f})',
+            fontsize=13, fontweight='bold')
+        ax3.set_ylim(0, max(n_weeks_with_data, n_good_opt, n_good_orig) + 1)
+        ax3.grid(True, alpha=0.3, axis='y')
+        ax3.tick_params(labelsize=11)
+        fig3.tight_layout()
+        fig3.savefig('good_weeks_comparison.png', dpi=150)
+        print(f"Saved 'good_weeks_comparison.png' — original: {n_good_orig}, "
+              f"optimized: {n_good_opt} (of {n_weeks_with_data} weeks with launches).")
+        plt.close(fig3)
 
         # --- Interactive Visualization (Plotly) ---
         try:
